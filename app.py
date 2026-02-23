@@ -12,67 +12,76 @@ from PIL import Image, ImageDraw
 # Load environment variables
 load_dotenv()
 
-# Explicit folders for production
 app = Flask(
     __name__,
     static_folder="static",
     template_folder="templates"
 )
 
-app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max
+app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024  # 16MB max upload
 
-ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp'}
+ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "bmp", "webp"}
 
+
+# ------------------------------------------------
+# Utility Functions
+# ------------------------------------------------
 
 def allowed_file(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+    return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
 
 
 def get_vision_client():
-    ai_endpoint = os.getenv('AI_ENDPOINT')
-    ai_key = os.getenv('AI_KEY')
+    endpoint = os.getenv("AI_ENDPOINT")
+    key = os.getenv("AI_KEY")
 
-    if not ai_endpoint or not ai_key:
-        raise ValueError("Azure environment variables not set on Render.")
+    if not endpoint or not key:
+        raise ValueError("Azure environment variables not set.")
 
     return ImageAnalysisClient(
-        endpoint=ai_endpoint,
-        credential=AzureKeyCredential(ai_key)
+        endpoint=endpoint,
+        credential=AzureKeyCredential(key)
     )
 
 
-def draw_bounding_boxes(image, items, mode="objects"):
-    draw = ImageDraw.Draw(image)
+def draw_bounding_boxes(image_data, items, mode="objects"):
+    """
+    Memory-safe image processing.
+    Opens image inside context manager and auto closes.
+    """
 
-    for item in items:
-        r = item.bounding_box
-        box = [r.x, r.y, r.x + r.width, r.y + r.height]
+    with Image.open(io.BytesIO(image_data)) as image:
 
-        if mode == "objects":
-            draw.rectangle(box, outline="cyan", width=3)
-            label = item.tags[0].name if item.tags else "Object"
-            draw.text((r.x, r.y), label, fill="cyan")
+        # Ensure no RGBA crash
+        if image.mode in ("RGBA", "P"):
+            image = image.convert("RGB")
 
-        elif mode == "people":
-            draw.rectangle(box, outline="magenta", width=3)
-            draw.text((r.x, r.y), "Person", fill="magenta")
+        draw = ImageDraw.Draw(image)
 
-    buffer = io.BytesIO()
+        for item in items:
+            r = item.bounding_box
+            box = [r.x, r.y, r.x + r.width, r.y + r.height]
 
-    # 🔥 IMPORTANT FIX (RGBA → RGB for JPEG)
-    if image.mode in ("RGBA", "P"):
-        image = image.convert("RGB")
+            if mode == "objects":
+                draw.rectangle(box, outline="cyan", width=3)
 
-    image.save(buffer, format="JPEG")
-    return base64.b64encode(buffer.getvalue()).decode()
+            elif mode == "people":
+                draw.rectangle(box, outline="magenta", width=3)
 
+        buffer = io.BytesIO()
+        image.save(buffer, format="JPEG")
+        return base64.b64encode(buffer.getvalue()).decode()
+
+
+# ------------------------------------------------
+# Routes
+# ------------------------------------------------
 
 @app.route("/")
 def index():
     return render_template("index.html")
 
 
-# Health check route (important for Render)
 @app.route("/health")
 def health():
     return "App is running"
@@ -81,16 +90,16 @@ def health():
 @app.route("/analyze", methods=["POST"])
 def analyze():
     try:
-        if 'image' not in request.files:
-            return jsonify({'error': 'No image file provided'}), 400
+        if "image" not in request.files:
+            return jsonify({"error": "No image file provided"}), 400
 
-        file = request.files['image']
+        file = request.files["image"]
 
-        if file.filename == '':
-            return jsonify({'error': 'No file selected'}), 400
+        if file.filename == "":
+            return jsonify({"error": "No file selected"}), 400
 
         if not allowed_file(file.filename):
-            return jsonify({'error': 'Invalid file type'}), 400
+            return jsonify({"error": "Invalid file type"}), 400
 
         image_data = file.read()
 
@@ -104,53 +113,65 @@ def analyze():
                 VisualFeatures.TAGS,
                 VisualFeatures.OBJECTS,
                 VisualFeatures.PEOPLE,
-            ]
+            ],
         )
 
         response = {
             "caption": result.caption.text if result.caption else "No caption",
-            "captionConfidence": round(result.caption.confidence * 100, 1) if result.caption else 0,
+            "captionConfidence": round(result.caption.confidence * 100, 1)
+            if result.caption else 0,
             "denseCaptions": [],
             "tags": [],
             "objects": [],
             "objectCount": 0,
             "peopleCount": 0,
             "annotatedImage": None,
-            "annotatedPeopleImage": None
+            "annotatedPeopleImage": None,
         }
 
+        # Dense captions
         if result.dense_captions:
             response["denseCaptions"] = [
-                {"text": c.text, "confidence": round(c.confidence * 100, 1)}
+                {
+                    "text": c.text,
+                    "confidence": round(c.confidence * 100, 1),
+                }
                 for c in result.dense_captions.list
             ]
 
+        # Tags
         if result.tags:
             response["tags"] = [
-                {"name": t.name, "confidence": round(t.confidence * 100, 1)}
+                {
+                    "name": t.name,
+                    "confidence": round(t.confidence * 100, 1),
+                }
                 for t in result.tags.list
             ]
 
+        # Objects
         if result.objects:
             response["objectCount"] = len(result.objects.list)
 
             response["objects"] = [
                 {
                     "name": o.tags[0].name if o.tags else "Unknown",
-                    "confidence": round(o.tags[0].confidence * 100, 1) if o.tags else 0
+                    "confidence": round(o.tags[0].confidence * 100, 1)
+                    if o.tags else 0,
                 }
                 for o in result.objects.list
             ]
 
-            image = Image.open(io.BytesIO(image_data))
-            response["annotatedImage"] = draw_bounding_boxes(image, result.objects.list)
+            response["annotatedImage"] = draw_bounding_boxes(
+                image_data, result.objects.list, "objects"
+            )
 
+        # People
         if result.people:
             response["peopleCount"] = len(result.people.list)
 
-            image = Image.open(io.BytesIO(image_data))
             response["annotatedPeopleImage"] = draw_bounding_boxes(
-                image, result.people.list, "people"
+                image_data, result.people.list, "people"
             )
 
         return jsonify(response)
@@ -162,7 +183,7 @@ def analyze():
 
 @app.errorhandler(413)
 def too_large(e):
-    return jsonify({'error': 'File too large (max 16MB)'}), 413
+    return jsonify({"error": "File too large (max 16MB)"}), 413
 
 
 if __name__ == "__main__":
