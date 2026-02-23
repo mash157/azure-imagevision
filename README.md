@@ -14,6 +14,20 @@ https://azure-imagevision.onrender.com
 
 ---
 
+## 📸 Application Preview
+
+### 🏠 Homepage
+<p align="center">
+  <img src="screenshots/home-preview.png" width="900">
+</p>
+
+---
+
+### 🧠 AI Analysis Results
+<p align="center">
+  <img src="screenshots/results-preview.png" width="900">
+</p>
+
 ## ✨ Features
 
 ### 🧠 AI Capabilities
