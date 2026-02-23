@@ -1,6 +1,7 @@
 import os
 import base64
 import io
+import traceback
 from dotenv import load_dotenv
 from flask import Flask, render_template, request, jsonify
 from azure.ai.vision.imageanalysis import ImageAnalysisClient
@@ -11,7 +12,7 @@ from PIL import Image, ImageDraw
 # Load environment variables
 load_dotenv()
 
-# ✅ Explicit static + template folders for production
+# Explicit folders for production
 app = Flask(
     __name__,
     static_folder="static",
@@ -20,7 +21,6 @@ app = Flask(
 
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max
 
-# Allowed extensions
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp'}
 
 
@@ -58,6 +58,11 @@ def draw_bounding_boxes(image, items, mode="objects"):
             draw.text((r.x, r.y), "Person", fill="magenta")
 
     buffer = io.BytesIO()
+
+    # 🔥 IMPORTANT FIX (RGBA → RGB for JPEG)
+    if image.mode in ("RGBA", "P"):
+        image = image.convert("RGB")
+
     image.save(buffer, format="JPEG")
     return base64.b64encode(buffer.getvalue()).decode()
 
@@ -67,7 +72,7 @@ def index():
     return render_template("index.html")
 
 
-# ✅ Health check route (important for Render debugging)
+# Health check route (important for Render)
 @app.route("/health")
 def health():
     return "App is running"
@@ -91,7 +96,6 @@ def analyze():
 
         client = get_vision_client()
 
-        # ✅ Add safety timeout handling
         result = client.analyze(
             image_data=image_data,
             visual_features=[
@@ -152,7 +156,7 @@ def analyze():
         return jsonify(response)
 
     except Exception as e:
-        print("Analyze Error:", str(e))
+        traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
 
