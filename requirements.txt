@@ -1,6 +1,5 @@
-Flask==3.0.0
-python-dotenv==1.0.0
-azure-ai-vision-imageanalysis==1.0.0b1
-Pillow==10.1.0
-Werkzeug==3.0.1
-gunicorn==21.2.0
+Flask
+gunicorn
+python-dotenv
+azure-ai-vision-imageanalysis==1.0.0b3
+Pillow>=10.0.0
