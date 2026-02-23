@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Azure AI Vision Analyzer</title>
+    
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+    
+    <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
+</head>
+<body>
+    <!-- Background gradient -->
+    <div class="gradient-background"></div>
+    
+    <!-- Main container -->
+    <div class="container-fluid min-vh-100 d-flex align-items-center justify-content-center py-4">
+        <div class="row w-100 justify-content-center">
+            <div class="col-12 col-lg-10 col-xl-8">
+                
+                <!-- Header -->
+                <div class="text-center mb-5">
+                    <div class="header-icon mb-3">
+                        <i class="bi bi-cloud-check"></i>
+                    </div>
+                    <h1 class="header-title">Azure AI Vision</h1>
+                    <p class="header-subtitle">Intelligent Image Analysis Powered by Azure</p>
+                </div>
+
+                <!-- Main Card -->
+                <div class="glass-card">
+                    
+                    <!-- Upload Section -->
+                    <div class="upload-section mb-5">
+                        <div id="dropZone" class="drop-zone">
+                            <div class="drop-zone-content">
+                                <i class="bi bi-cloud-arrow-up"></i>
+                                <h5>Drop your image here</h5>
+                                <p class="text-muted">or click to browse</p>
+                                <input type="file" id="fileInput" class="file-input" accept="image/*">
+                                <button type="button" class="btn btn-primary btn-sm mt-2">Select Image</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Image Preview -->
+                    <div id="previewContainer" class="preview-container d-none mb-4">
+                        <img id="preview" class="preview-image" alt="Preview">
+                        <div class="preview-overlay">
+                            <button type="button" class="btn btn-sm btn-light" onclick="clearImage()">
+                                <i class="bi bi-x"></i> Clear
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Action Button -->
+                    <div id="actionContainer" class="d-none text-center mb-4">
+                        <button id="analyzeBtn" class="btn btn-gradient btn-lg" onclick="analyzeImage()">
+                            <i class="bi bi-lightning-charge"></i> Analyze Image
+                        </button>
+                    </div>
+
+                    <!-- Loading Spinner -->
+                    <div id="loadingContainer" class="d-none text-center mb-4">
+                        <div class="spinner-border text-primary mb-3" role="status">
+                            <span class="visually-hidden">Analyzing...</span>
+                        </div>
+                        <p class="text-muted">Analyzing your image with AI...</p>
+                    </div>
+
+                    <!-- Results Section -->
+                    <div id="resultsContainer" class="d-none">
+                        
+                        <!-- Caption -->
+                        <div class="result-section mb-4">
+                            <div class="caption-box">
+                                <h3 id="captionText" class="caption-text"></h3>
+                                <div class="confidence-bar">
+                                    <div id="confidenceIndicator" class="confidence-fill"></div>
+                                    <span id="confidenceText" class="confidence-text"></span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Dense Captions -->
+                        <div id="denseCaptionsSection" class="result-section d-none mb-4">
+                            <h5 class="section-title">
+                                <i class="bi bi-chat-dots"></i> Dense Captions
+                            </h5>
+                            <div id="denseCaptionsList" class="captions-list"></div>
+                        </div>
+
+                        <!-- Tags -->
+                        <div id="tagsSection" class="result-section d-none mb-4">
+                            <h5 class="section-title">
+                                <i class="bi bi-tags"></i> Tags
+                            </h5>
+                            <div id="tagsList" class="tags-container"></div>
+                        </div>
+
+                        <!-- Objects Detection -->
+                        <div id="objectsSection" class="result-section d-none mb-4">
+                            <h5 class="section-title">
+                                <i class="bi bi-box2"></i> Objects Detected
+                            </h5>
+                            <div class="objects-info mb-3">
+                                <span id="objectCount" class="badge bg-primary"></span>
+                            </div>
+                            <img id="objectsImage" class="annotated-image" alt="Objects Detection">
+                            <div id="objectsList" class="objects-list mt-3"></div>
+                        </div>
+
+                        <!-- People Detection -->
+                        <div id="peopleSection" class="result-section d-none mb-4">
+                            <h5 class="section-title">
+                                <i class="bi bi-people"></i> People Detection
+                            </h5>
+                            <div class="people-info mb-3">
+                                <span id="peopleCount" class="badge bg-danger"></span>
+                            </div>
+                            <img id="peopleImage" class="annotated-image" alt="People Detection">
+                        </div>
+
+                        <!-- Reset Button -->
+                        <div class="text-center mt-5">
+                            <button type="button" class="btn btn-outline-primary" onclick="resetForm()">
+                                <i class="bi bi-arrow-counterclockwise"></i> Analyze Another Image
+                            </button>
+                        </div>
+
+                    </div>
+
+                </div>
+
+                <!-- Status Messages -->
+                <div id="errorContainer" class="d-none mt-4"></div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap 5 JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+        const previewContainer = document.getElementById('previewContainer');
+        const preview = document.getElementById('preview');
+        const actionContainer = document.getElementById('actionContainer');
+        const loadingContainer = document.getElementById('loadingContainer');
+        const resultsContainer = document.getElementById('resultsContainer');
+        const errorContainer = document.getElementById('errorContainer');
+
+        // Drag and drop functionality
+        dropZone.addEventListener('click', () => fileInput.click());
+        
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('drag-over');
+        });
+        
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('drag-over');
+        });
+        
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('drag-over');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                fileInput.files = files;
+                handleFileSelection();
+            }
+        });
+
+        fileInput.addEventListener('change', handleFileSelection);
+
+        function handleFileSelection() {
+            const file = fileInput.files[0];
+            if (file && file.type.startsWith('image/')) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    preview.src = e.target.result;
+                    previewContainer.classList.remove('d-none');
+                    dropZone.classList.add('d-none');
+                    actionContainer.classList.remove('d-none');
+                    resultsContainer.classList.add('d-none');
+                    errorContainer.classList.add('d-none');
+                };
+                reader.readAsDataURL(file);
+            } else {
+                showError('Please select a valid image file');
+            }
+        }
+
+        function clearImage() {
+            fileInput.value = '';
+            preview.src = '';
+            previewContainer.classList.add('d-none');
+            dropZone.classList.remove('d-none');
+            actionContainer.classList.add('d-none');
+            resultsContainer.classList.add('d-none');
+            errorContainer.classList.add('d-none');
+        }
+
+        function resetForm() {
+            clearImage();
+        }
+
+        function analyzeImage() {
+            const file = fileInput.files[0];
+            if (!file) {
+                showError('Please select an image first');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('image', file);
+
+            actionContainer.classList.add('d-none');
+            loadingContainer.classList.remove('d-none');
+            errorContainer.classList.add('d-none');
+
+            fetch('/analyze', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    showError(data.error);
+                } else {
+                    displayResults(data);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showError('Failed to analyze image. Please try again.');
+            })
+            .finally(() => {
+                loadingContainer.classList.add('d-none');
+            });
+        }
+
+        function displayResults(data) {
+            // Clear previous results
+            resultsContainer.classList.remove('d-none');
+
+            // Caption
+            document.getElementById('captionText').textContent = data.caption;
+            const confidencePercentage = Math.round(data.captionConfidence);
+            document.getElementById('confidenceIndicator').style.width = confidencePercentage + '%';
+            document.getElementById('confidenceText').textContent = confidencePercentage + '%';
+
+            // Dense Captions
+            if (data.denseCaptions && data.denseCaptions.length > 0) {
+                const denseCaptionsList = document.getElementById('denseCaptionsList');
+                denseCaptionsList.innerHTML = data.denseCaptions.map(caption => `
+                    <div class="caption-item">
+                        <p class="mb-2">${caption.text}</p>
+                        <small class="text-muted">Confidence: ${caption.confidence}%</small>
+                    </div>
+                `).join('');
+                document.getElementById('denseCaptionsSection').classList.remove('d-none');
+            }
+
+            // Tags
+            if (data.tags && data.tags.length > 0) {
+                const tagsList = document.getElementById('tagsList');
+                tagsList.innerHTML = data.tags.map(tag => `
+                    <span class="badge badge-tag">${tag.name}</span>
+                `).join('');
+                document.getElementById('tagsSection').classList.remove('d-none');
+            }
+
+            // Objects
+            if (data.objectCount > 0) {
+                document.getElementById('objectCount').textContent = `${data.objectCount} object${data.objectCount !== 1 ? 's' : ''} detected`;
+                if (data.annotatedImage) {
+                    document.getElementById('objectsImage').src = 'data:image/jpeg;base64,' + data.annotatedImage;
+                }
+                
+                const objectsList = document.getElementById('objectsList');
+                objectsList.innerHTML = data.objects.map(obj => `
+                    <div class="object-item">
+                        <span class="object-name">${obj.name}</span>
+                        <span class="object-confidence">${obj.confidence}% confidence</span>
+                    </div>
+                `).join('');
+                
+                document.getElementById('objectsSection').classList.remove('d-none');
+            }
+
+            // People
+            if (data.peopleCount > 0) {
+                document.getElementById('peopleCount').textContent = `${data.peopleCount} person${data.peopleCount !== 1 ? 's' : ''} detected`;
+                if (data.annotatedPeopleImage) {
+                    document.getElementById('peopleImage').src = 'data:image/jpeg;base64,' + data.annotatedPeopleImage;
+                }
+                document.getElementById('peopleSection').classList.remove('d-none');
+            }
+        }
+
+        function showError(message) {
+            errorContainer.innerHTML = `
+                <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                    <i class="bi bi-exclamation-circle"></i> ${message}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            `;
+            errorContainer.classList.remove('d-none');
+        }
+    </script>
+</body>
+</html>
